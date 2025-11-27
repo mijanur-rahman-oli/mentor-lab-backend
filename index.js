@@ -6,9 +6,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// CORS configuration - Allow all origins
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Mock database - In-memory storage
 let courses = [
@@ -94,28 +101,52 @@ let courses = [
 
 // API Routes
 
-// Test route
+// Root route
 app.get('/', (req, res) => {
-  res.json({ message: 'Course Platform API is running!' });
+  res.json({ 
+    message: 'Course Platform API is running on Vercel! 🚀',
+    version: '1.0.0',
+    endpoints: {
+      root: '/',
+      health: '/api/health',
+      courses: '/api/courses',
+      singleCourse: '/api/courses/:id',
+      addCourse: 'POST /api/courses',
+      updateCourse: 'PUT /api/courses/:id',
+      deleteCourse: 'DELETE /api/courses/:id'
+    }
+  });
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    coursesCount: courses.length
+  });
 });
 
 // Get all courses
 app.get('/api/courses', (req, res) => {
+  console.log('GET /api/courses - Returning', courses.length, 'courses');
   res.json(courses);
 });
 
 // Get single course by ID
 app.get('/api/courses/:id', (req, res) => {
+  console.log('GET /api/courses/:id - ID:', req.params.id);
   const course = courses.find(c => c.id === req.params.id);
   if (course) {
     res.json(course);
   } else {
-    res.status(404).json({ message: 'Course not found' });
+    res.status(404).json({ message: 'Course not found', id: req.params.id });
   }
 });
 
 // Add new course
 app.post('/api/courses', (req, res) => {
+  console.log('POST /api/courses - Body:', req.body);
   const newCourse = {
     id: String(courses.length + 1),
     ...req.body,
@@ -128,6 +159,7 @@ app.post('/api/courses', (req, res) => {
 
 // Update course
 app.put('/api/courses/:id', (req, res) => {
+  console.log('PUT /api/courses/:id - ID:', req.params.id, 'Body:', req.body);
   const index = courses.findIndex(c => c.id === req.params.id);
   if (index !== -1) {
     courses[index] = { ...courses[index], ...req.body };
@@ -139,6 +171,7 @@ app.put('/api/courses/:id', (req, res) => {
 
 // Delete course
 app.delete('/api/courses/:id', (req, res) => {
+  console.log('DELETE /api/courses/:id - ID:', req.params.id);
   const index = courses.findIndex(c => c.id === req.params.id);
   if (index !== -1) {
     courses.splice(index, 1);
@@ -148,8 +181,30 @@ app.delete('/api/courses/:id', (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`✅ Server is running on http://localhost:${PORT}`);
-  console.log(`📚 API available at http://localhost:${PORT}/api/courses`);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    message: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
 });
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ 
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`✅ Server is running on http://localhost:${PORT}`);
+    console.log(`📚 API available at http://localhost:${PORT}/api/courses`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
